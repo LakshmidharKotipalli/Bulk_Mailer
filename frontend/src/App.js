@@ -21,7 +21,7 @@ export default function App() {
     formData.append("body", body);
 
     try {
-      const res = await axios.post("http://localhost:8000/send-emails/", formData);
+      const res = await axios.post("https://your-fastapi-backend.onrender.com/send-emails/", formData);
       console.log("Email API Response:", res.data);
       setResults(res.data.results);
     } catch (err) {
