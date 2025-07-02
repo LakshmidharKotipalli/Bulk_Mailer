@@ -22,7 +22,7 @@ export default function App() {
     formData.append("body", body);
 
     try {
-      const res = await axios.post("http://localhost:8000/send-emails/", formData);
+      const res = await axios.post("https://bulk-mail-backend-amrc.onrender.com/send-emails/", formData);
       setResults(res.data.results);
     } catch (err) {
       alert("Error sending emails: " + (err.response?.data?.error || err.message));
