@@ -1,14 +1,16 @@
-from fastapi import FastAPI, UploadFile, Form
+from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Optional
+from pydantic import BaseModel
 import pandas as pd
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from string import Template
 import os
 
 app = FastAPI()
 
+# Allow frontend access
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,66 +19,68 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.post("/send-bulk-emails")
-async def send_bulk_emails(
-    sender_email: str = Form(...),
-    sender_password: str = Form(...),
-    subject: str = Form(...),
-    body_template: str = Form(...),
-    file: UploadFile = Form(...)
-):
-    # Save uploaded file locally
-    file_ext = os.path.splitext(file.filename)[1].lower()
-    upload_path = f"uploads/{file.filename}"
-    os.makedirs("uploads", exist_ok=True)
-    
-    with open(upload_path, "wb") as f:
-        f.write(await file.read())
+def get_smtp_settings(email: str):
+    domain = email.split("@")[-1].lower()
 
-    # Read uploaded file
-    if file_ext == ".csv":
-        df = pd.read_csv(upload_path)
-    elif file_ext in [".xls", ".xlsx"]:
-        df = pd.read_excel(upload_path)
-    elif file_ext == ".json":
-        df = pd.read_json(upload_path)
+    if domain == "gmail.com":
+        return "smtp.gmail.com", 587, False
+    elif domain == "ganait.com":
+        return "mail.gandi.net", 465, True
     else:
-        return {"status": "Unsupported file type"}
+        raise ValueError("Unsupported email domain.")
 
-    # Ensure required columns exist
+def send_email(sender, password, recipient, subject, body):
+    msg = MIMEMultipart()
+    msg["From"] = sender
+    msg["To"] = recipient
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain"))
+
+    smtp_server, port, use_ssl = get_smtp_settings(sender)
+
+    if use_ssl:
+        with smtplib.SMTP_SSL(smtp_server, port) as server:
+            server.login(sender, password)
+            server.sendmail(sender, recipient, msg.as_string())
+    else:
+        with smtplib.SMTP(smtp_server, port) as server:
+            server.starttls()
+            server.login(sender, password)
+            server.sendmail(sender, recipient, msg.as_string())
+
+@app.post("/send")
+async def send_bulk_emails(
+    file: UploadFile = File(...),
+    subject: str = Form(...),
+    body: str = Form(...),
+    sender: str = Form(...),
+    password: str = Form(...)
+):
+    contents = await file.read()
+    filename = file.filename.lower()
+
+    # Parse file
+    if filename.endswith(".csv"):
+        df = pd.read_csv(pd.io.common.BytesIO(contents))
+    elif filename.endswith(".json"):
+        df = pd.read_json(pd.io.common.BytesIO(contents))
+    elif filename.endswith((".xls", ".xlsx")):
+        df = pd.read_excel(pd.io.common.BytesIO(contents))
+    else:
+        return {"error": "Unsupported file type. Use .csv, .json, or .xlsx"}
+
     if "Email" not in df.columns or "name" not in df.columns:
-        return {"status": "Missing required columns: Email and name"}
+        return {"error": "File must contain 'Email' and 'name' columns."}
 
-    template = Template(body_template)
-    sent = 0
-    failed = 0
-
-    for index, row in df.iterrows():
-        to_email = row.get("Email")
-        name = row.get("name", "").strip()
+    for _, row in df.iterrows():
+        recipient = row["Email"]
+        name = row["name"]
+        personalized_body = body.replace("$name", name)
+        personalized_subject = subject.replace("$name", name)
 
         try:
-            # Fill name into template
-            message_body = template.safe_substitute(name=name)
-
-            msg = MIMEMultipart()
-            msg["From"] = sender_email
-            msg["To"] = to_email
-            msg["Subject"] = subject
-            msg.attach(MIMEText(message_body, "plain"))
-
-            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-                server.login(sender_email, sender_password)
-                server.sendmail(sender_email, to_email, msg.as_string())
-
-            sent += 1
-
+            send_email(sender, password, recipient, personalized_subject, personalized_body)
         except Exception as e:
-            print(f"Failed to send to {to_email}: {e}")
-            failed += 1
+            print(f"Failed to send email to {recipient}: {e}")
 
-    return {
-        "status": "Completed",
-        "sent": sent,
-        "failed": failed
-    }
+    return {"status": "Emails processed."}
