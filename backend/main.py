@@ -66,32 +66,36 @@ async def send_bulk_emails(
     failed = 0
 
     for _, row in df.iterrows():
-        full_name = str(row["name"]).strip()
-        first_name = full_name.split()[0]
-        recipient_email = row["email"]
+    full_name = str(row.get("name", "")).strip()
+    first_name = full_name.split()[0] if full_name else "there"
+    recipient_email = str(row.get("email", "")).strip()
 
-        personalized_body = (
-            body_template
-            .replace("{{name}}", full_name)
-            .replace("{{first_name}}", first_name)
+    if not recipient_email:
+        print("⚠️ Missing email, skipping...")
+        continue
+
+    # Generate personalized body
+    personalized_body = (
+        body_template
+        .replace("{{name}}", full_name)
+        .replace("{{first_name}}", first_name)
+    )
+
+    try:
+        send_email(
+            sender_email,
+            sender_password,
+            recipient_email,
+            subject,
+            personalized_body,
+            smtp_host,
+            smtp_port,
+            use_tls
         )
+        print(f"✅ Sent to {recipient_email} as {first_name}")
+    except Exception as e:
+        print(f"❌ Failed to send to {recipient_email}: {e}")
 
-        try:
-            send_email(
-                sender_email,
-                sender_password,
-                recipient_email,
-                subject,
-                personalized_body,
-                smtp_host,
-                smtp_port,
-                use_tls
-            )
-            print(f"✅ Sent to {recipient_email} as {first_name}")
-            sent += 1
-        except Exception as e:
-            print(f"❌ Failed to send to {recipient_email}: {e}")
-            failed += 1
 
     return {
         "message": f"✅ Sent: {sent} | ❌ Failed: {failed}",
