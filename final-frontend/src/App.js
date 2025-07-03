@@ -9,7 +9,6 @@ function App() {
     body: "",
     file: null,
   });
-
   const [status, setStatus] = useState("");
 
   const handleChange = (e) => {
@@ -27,26 +26,11 @@ function App() {
     }));
   };
 
-  // Determine SMTP config based on domain
   const getSMTPConfig = (email) => {
     const domain = email.split("@")[1];
-
-    if (domain === "gmail.com") {
-      return {
-        smtpServer: "smtp.gmail.com",
-        smtpPort: 587,
-      };
-    } else if (domain === "ganait.com") {
-      return {
-        smtpServer: "mail.ganait.com", // or update to real one if different
-        smtpPort: 587,
-      };
-    } else {
-      return {
-        smtpServer: "smtp." + domain,
-        smtpPort: 587,
-      };
-    }
+    if (domain === "gmail.com") return { smtpServer: "smtp.gmail.com", smtpPort: 587 };
+    if (domain === "ganait.com") return { smtpServer: "mail.ganait.com", smtpPort: 587 };
+    return { smtpServer: "smtp." + domain, smtpPort: 587 };
   };
 
   const handleSubmit = async (e) => {
@@ -54,7 +38,6 @@ function App() {
     setStatus("Sending...");
 
     const { smtpServer, smtpPort } = getSMTPConfig(formData.email);
-
     const data = new FormData();
     data.append("email", formData.email);
     data.append("password", formData.password);
@@ -81,43 +64,39 @@ function App() {
           <input
             type="email"
             name="email"
-            placeholder="Your Email (Gmail or Ganait)"
+            placeholder="Your Email"
             value={formData.email}
             onChange={handleChange}
             required
             className="w-full p-2 border rounded"
           />
-
           <input
             type="password"
             name="password"
-            placeholder="App Password / SMTP Password"
+            placeholder="App/SMTP Password"
             value={formData.password}
             onChange={handleChange}
             required
             className="w-full p-2 border rounded"
           />
-
           <input
             type="text"
             name="subject"
-            placeholder="Email Subject (can include $name)"
+            placeholder="Subject (use $name to personalize)"
             value={formData.subject}
             onChange={handleChange}
             required
             className="w-full p-2 border rounded"
           />
-
           <textarea
             name="body"
-            placeholder="Email body. Use $name to customize."
+            placeholder="Body (use $name to personalize)"
             value={formData.body}
             onChange={handleChange}
             rows={6}
             required
             className="w-full p-3 border rounded"
           />
-
           <input
             type="file"
             name="file"
@@ -126,20 +105,11 @@ function App() {
             required
             className="w-full p-2 border rounded"
           />
-
-          <button
-            type="submit"
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full"
-          >
-            Send Bulk Emails
+          <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded w-full">
+            Send Emails
           </button>
         </form>
-
-        {status && (
-          <div className="mt-4 text-center text-sm text-gray-700">
-            {status}
-          </div>
-        )}
+        {status && <div className="mt-4 text-center text-sm text-gray-700">{status}</div>}
       </div>
     </div>
   );
