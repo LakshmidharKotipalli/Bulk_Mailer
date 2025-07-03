@@ -2,91 +2,142 @@ import React, { useState } from "react";
 import axios from "axios";
 
 function App() {
-  const [senderEmail, setSenderEmail] = useState("");
-  const [appPassword, setAppPassword] = useState("");
-  const [subject, setSubject] = useState("");
-  const [body, setBody] = useState("");
-  const [file, setFile] = useState(null);
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+    smtpServer: "smtp.gmail.com",
+    smtpPort: 587,
+    subject: "",
+    body: "",
+    file: null,
+  });
+
   const [status, setStatus] = useState("");
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleFileChange = (e) => {
+    setFormData((prev) => ({
+      ...prev,
+      file: e.target.files[0],
+    }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setStatus("Sending...");
 
-    if (!file) {
-      setStatus("Please upload an Excel file (.xlsx)");
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("sender_email", senderEmail);
-    formData.append("app_password", appPassword);
-    formData.append("subject", subject);
-    formData.append("body", body);
+    const data = new FormData();
+    data.append("email", formData.email);
+    data.append("password", formData.password);
+    data.append("smtp_server", formData.smtpServer);
+    data.append("smtp_port", formData.smtpPort);
+    data.append("subject", formData.subject);
+    data.append("body", formData.body);
+    data.append("file", formData.file);
 
     try {
-      const response = await axios.post(
-        "https://bulk-mail-backend-amrc.onrender.com/send-emails/",
-        formData
-      );
-      setStatus(response.data.message || response.data.error);
+      const res = await axios.post("https://your-backend-url/send-emails/", data);
+      setStatus(res.data.message || "Emails sent successfully!");
     } catch (error) {
-      setStatus("Failed to send emails. Please check the logs or try again.");
+      console.error(error);
+      setStatus("Error sending emails.");
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-100 to-white flex items-center justify-center p-6">
-      <div className="w-full max-w-2xl bg-white shadow-xl rounded-2xl p-8 space-y-6">
-        <h1 className="text-3xl font-bold text-center text-blue-600">📧 Bulk Mail Sender</h1>
+    <div className="min-h-screen bg-gray-100 p-6">
+      <div className="max-w-2xl mx-auto bg-white shadow-md rounded-lg p-6">
+        <h2 className="text-2xl font-bold mb-4 text-center">Bulk Mailer</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
             type="email"
-            placeholder="Your Gmail"
-            value={senderEmail}
-            onChange={(e) => setSenderEmail(e.target.value)}
+            name="email"
+            placeholder="Your Email (e.g., you@ganait.com)"
+            value={formData.email}
+            onChange={handleChange}
             required
-            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full p-2 border rounded"
           />
+
           <input
             type="password"
-            placeholder="App Password (Gmail)"
-            value={appPassword}
-            onChange={(e) => setAppPassword(e.target.value)}
+            name="password"
+            placeholder="App Password / SMTP Password"
+            value={formData.password}
+            onChange={handleChange}
             required
-            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full p-2 border rounded"
           />
+
           <input
             type="text"
-            placeholder="Email Subject"
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
+            name="smtpServer"
+            placeholder="SMTP Server (e.g., smtp.gmail.com)"
+            value={formData.smtpServer}
+            onChange={handleChange}
             required
-            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full p-2 border rounded"
           />
-          <textarea
-            placeholder="Email Body"
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
+
+          <input
+            type="number"
+            name="smtpPort"
+            placeholder="SMTP Port (e.g., 587)"
+            value={formData.smtpPort}
+            onChange={handleChange}
             required
-            rows="5"
-            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          ></textarea>
+            className="w-full p-2 border rounded"
+          />
+
+          <input
+            type="text"
+            name="subject"
+            placeholder="Email Subject (can include $name)"
+            value={formData.subject}
+            onChange={handleChange}
+            required
+            className="w-full p-2 border rounded"
+          />
+
+          <textarea
+            name="body"
+            placeholder="Email body. Use $name to customize."
+            value={formData.body}
+            onChange={handleChange}
+            rows={6}
+            required
+            className="w-full p-3 border rounded"
+          />
+
           <input
             type="file"
-            accept=".xlsx"
-            onChange={(e) => setFile(e.target.files[0])}
+            name="file"
+            accept=".csv,.xlsx,.json"
+            onChange={handleFileChange}
             required
-            className="w-full px-4 py-2 border rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+            className="w-full p-2 border rounded"
           />
+
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full"
           >
-            Send Emails
+            Send Bulk Emails
           </button>
         </form>
-        {status && <p className="text-center text-sm text-gray-700">{status}</p>}
+
+        {status && (
+          <div className="mt-4 text-center text-sm text-gray-700">
+            {status}
+          </div>
+        )}
       </div>
     </div>
   );
