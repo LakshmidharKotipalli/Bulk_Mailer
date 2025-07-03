@@ -1,84 +1,146 @@
-import React, { useState } from 'react';
-import axios from 'axios';
+import React, { useState } from "react";
+import axios from "axios";
 
-export default function App() {
-  const [file, setFile] = useState(null);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [subject, setSubject] = useState('');
-  const [body, setBody] = useState('');
-  const [results, setResults] = useState([]);
+function App() {
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+    smtpServer: "smtp.gmail.com",
+    smtpPort: 587,
+    subject: "",
+    body: "",
+    file: null,
+  });
+
+  const [status, setStatus] = useState("");
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleFileChange = (e) => {
+    setFormData((prev) => ({
+      ...prev,
+      file: e.target.files[0],
+    }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!file) return alert("Please upload an Excel file.");
+    setStatus("Sending...");
 
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("sender_email", email);
-    formData.append("app_password", password);
-    formData.append("subject", subject);
-    formData.append("body", body);
+    const data = new FormData();
+    data.append("email", formData.email);
+    data.append("password", formData.password);
+    data.append("smtp_server", formData.smtpServer);
+    data.append("smtp_port", formData.smtpPort);
+    data.append("subject", formData.subject);
+    data.append("body", formData.body);
+    data.append("file", formData.file);
 
     try {
-      const res = await axios.post("https://your-fastapi-backend.onrender.com/send-emails/", formData);
-      console.log("Email API Response:", res.data);
-      setResults(res.data.results);
-    } catch (err) {
-      console.error("Sending failed:", err.response?.data || err.message);
-      alert("Error sending emails: " + (err.response?.data?.error || err.message));
+      const res = await axios.post("https://your-backend-url/send-emails/", data);
+      setStatus(res.data.message || "Emails sent successfully!");
+    } catch (error) {
+      console.error(error);
+      setStatus("Error sending emails.");
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-r from-blue-50 to-purple-100 p-6">
-      <div className="max-w-2xl mx-auto bg-white p-8 rounded-2xl shadow-2xl">
-        <h1 className="text-3xl font-bold text-blue-700 text-center mb-6">📬 Bulk Gmail Mailer</h1>
-
+    <div className="min-h-screen bg-gray-100 p-6">
+      <div className="max-w-2xl mx-auto bg-white shadow-md rounded-lg p-6">
+        <h2 className="text-2xl font-bold mb-4 text-center">Bulk Mailer</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block mb-1 font-medium text-gray-700">Gmail Address</label>
-            <input type="email" className="w-full border p-2 rounded" onChange={e => setEmail(e.target.value)} required />
-          </div>
+          <input
+            type="email"
+            name="email"
+            placeholder="Your Email (e.g., you@ganait.com)"
+            value={formData.email}
+            onChange={handleChange}
+            required
+            className="w-full p-2 border rounded"
+          />
 
-          <div>
-            <label className="block mb-1 font-medium text-gray-700">App Password</label>
-            <input type="password" className="w-full border p-2 rounded" onChange={e => setPassword(e.target.value)} required />
-          </div>
+          <input
+            type="password"
+            name="password"
+            placeholder="App Password / SMTP Password"
+            value={formData.password}
+            onChange={handleChange}
+            required
+            className="w-full p-2 border rounded"
+          />
 
-          <div>
-            <label className="block mb-1 font-medium text-gray-700">Subject</label>
-            <input type="text" className="w-full border p-2 rounded" onChange={e => setSubject(e.target.value)} required />
-          </div>
+          <input
+            type="text"
+            name="smtpServer"
+            placeholder="SMTP Server (e.g., smtp.gmail.com)"
+            value={formData.smtpServer}
+            onChange={handleChange}
+            required
+            className="w-full p-2 border rounded"
+          />
 
-          <div>
-            <label className="block mb-1 font-medium text-gray-700">Email Body</label>
-            <textarea rows="4" className="w-full border p-2 rounded" onChange={e => setBody(e.target.value)} required />
-          </div>
+          <input
+            type="number"
+            name="smtpPort"
+            placeholder="SMTP Port (e.g., 587)"
+            value={formData.smtpPort}
+            onChange={handleChange}
+            required
+            className="w-full p-2 border rounded"
+          />
 
-          <div>
-            <label className="block mb-1 font-medium text-gray-700">Upload Excel (.xlsx)</label>
-            <input type="file" accept=".xlsx" className="w-full" onChange={e => setFile(e.target.files[0])} />
-          </div>
+          <input
+            type="text"
+            name="subject"
+            placeholder="Email Subject (can include $name)"
+            value={formData.subject}
+            onChange={handleChange}
+            required
+            className="w-full p-2 border rounded"
+          />
 
-          <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white w-full py-2 rounded mt-4 font-semibold">
-            🚀 Send Emails
+          <textarea
+            name="body"
+            placeholder="Email body. Use $name to customize."
+            value={formData.body}
+            onChange={handleChange}
+            rows={6}
+            required
+            className="w-full p-3 border rounded"
+          />
+
+          <input
+            type="file"
+            name="file"
+            accept=".csv,.xlsx,.json"
+            onChange={handleFileChange}
+            required
+            className="w-full p-2 border rounded"
+          />
+
+          <button
+            type="submit"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full"
+          >
+            Send Bulk Emails
           </button>
         </form>
 
-        {results.length > 0 && (
-          <div className="mt-8">
-            <h2 className="text-xl font-semibold text-gray-700 mb-2">📊 Results</h2>
-            <ul className="space-y-1">
-              {results.map((r, i) => (
-                <li key={i} className={`text-sm ${r.status === "Sent" ? "text-green-600" : "text-red-600"}`}>
-                  {r.email} — {r.status}
-                </li>
-              ))}
-            </ul>
+        {status && (
+          <div className="mt-4 text-center text-sm text-gray-700">
+            {status}
           </div>
         )}
       </div>
     </div>
   );
 }
+
+export default App;
