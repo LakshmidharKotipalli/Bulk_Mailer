@@ -43,7 +43,7 @@ function App() {
     data.append("file", formData.file);
 
     try {
-      const res = await axios.post("https://your-backend-url/send-emails/", data);
+      const res = await axios.post("https://bulk-mailer-backend.onrender.com/send-emails/", data);
       setStatus(res.data.message || "Emails sent successfully!");
     } catch (error) {
       console.error(error);
