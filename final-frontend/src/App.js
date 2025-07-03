@@ -65,7 +65,7 @@ function App() {
     data.append("smtp_port", smtpPort);
 
     try {
-      const res = await axios.post("https://bulk-mail-backend-amrc.onrender.com", data);
+      const res = await axios.post("https://bulk-mail-backend-amrc.onrender.com/send-emails/", data);
       setStatus(res.data.message || "Emails sent successfully!");
     } catch (error) {
       console.error("Error:", error.response?.data || error.message);
