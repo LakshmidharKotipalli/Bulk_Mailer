@@ -1,16 +1,15 @@
-from fastapi import FastAPI, UploadFile, File, Form
-from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional
-from pydantic import BaseModel
-import pandas as pd
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 import os
+import smtplib
+import pandas as pd
+from fastapi import FastAPI, UploadFile, Form
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from typing import Optional
 
 app = FastAPI()
 
-# Allow frontend access
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,68 +18,58 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def get_smtp_settings(email: str):
-    domain = email.split("@")[-1].lower()
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-    if domain == "gmail.com":
-        return "smtp.gmail.com", 587, False
-    elif domain == "ganait.com":
-        return "mail.gandi.net", 465, True
+def read_file(file_path: str):
+    if file_path.endswith('.csv'):
+        return pd.read_csv(file_path)
+    elif file_path.endswith('.xlsx'):
+        return pd.read_excel(file_path)
+    elif file_path.endswith('.json'):
+        return pd.read_json(file_path)
     else:
-        raise ValueError("Unsupported email domain.")
+        raise ValueError("Unsupported file format")
 
-def send_email(sender, password, recipient, subject, body):
-    msg = MIMEMultipart()
-    msg["From"] = sender
-    msg["To"] = recipient
-    msg["Subject"] = subject
-    msg.attach(MIMEText(body, "plain"))
-
-    smtp_server, port, use_ssl = get_smtp_settings(sender)
-
-    if use_ssl:
-        with smtplib.SMTP_SSL(smtp_server, port) as server:
-            server.login(sender, password)
-            server.sendmail(sender, recipient, msg.as_string())
-    else:
-        with smtplib.SMTP(smtp_server, port) as server:
-            server.starttls()
-            server.login(sender, password)
-            server.sendmail(sender, recipient, msg.as_string())
-
-@app.post("/send")
+@app.post("/send-bulk")
 async def send_bulk_emails(
-    file: UploadFile = File(...),
+    file: UploadFile,
+    email: str = Form(...),
+    password: str = Form(...),
     subject: str = Form(...),
     body: str = Form(...),
-    sender: str = Form(...),
-    password: str = Form(...)
+    smtp_server: Optional[str] = Form("smtp.gmail.com"),
+    smtp_port: Optional[int] = Form(587),
 ):
-    contents = await file.read()
-    filename = file.filename.lower()
+    try:
+        file_location = f"{UPLOAD_DIR}/{file.filename}"
+        with open(file_location, "wb") as f:
+            f.write(await file.read())
 
-    # Parse file
-    if filename.endswith(".csv"):
-        df = pd.read_csv(pd.io.common.BytesIO(contents))
-    elif filename.endswith(".json"):
-        df = pd.read_json(pd.io.common.BytesIO(contents))
-    elif filename.endswith((".xls", ".xlsx")):
-        df = pd.read_excel(pd.io.common.BytesIO(contents))
-    else:
-        return {"error": "Unsupported file type. Use .csv, .json, or .xlsx"}
+        df = read_file(file_location)
 
-    if "Email" not in df.columns or "name" not in df.columns:
-        return {"error": "File must contain 'Email' and 'name' columns."}
+        if 'Email' not in df.columns or 'name' not in df.columns:
+            return {"error": "File must contain 'Email' and 'name' columns"}
 
-    for _, row in df.iterrows():
-        recipient = row["Email"]
-        name = row["name"]
-        personalized_body = body.replace("$name", name)
-        personalized_subject = subject.replace("$name", name)
+        # Connect to SMTP
+        server = smtplib.SMTP(smtp_server, smtp_port)
+        server.starttls()
+        server.login(email, password)
 
-        try:
-            send_email(sender, password, recipient, personalized_subject, personalized_body)
-        except Exception as e:
-            print(f"Failed to send email to {recipient}: {e}")
+        for _, row in df.iterrows():
+            to_email = row['Email']
+            name = row['name']
+            personalized_body = body.replace('$name', name)
 
-    return {"status": "Emails processed."}
+            msg = MIMEMultipart()
+            msg['From'] = email
+            msg['To'] = to_email
+            msg['Subject'] = subject
+            msg.attach(MIMEText(personalized_body, 'plain'))
+
+            server.send_message(msg)
+
+        server.quit()
+        return {"message": "Emails sent successfully!"}
+    except Exception as e:
+        return {"error": str(e)}
