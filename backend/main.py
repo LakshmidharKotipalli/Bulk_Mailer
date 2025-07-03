@@ -1,75 +1,71 @@
-import os
-import smtplib
 import pandas as pd
+import smtplib
+from email.mime.text import MIMEText
 from fastapi import FastAPI, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from typing import Optional
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Frontend domain for production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-def read_file(file_path: str):
-    if file_path.endswith('.csv'):
-        return pd.read_csv(file_path)
-    elif file_path.endswith('.xlsx'):
-        return pd.read_excel(file_path)
-    elif file_path.endswith('.json'):
-        return pd.read_json(file_path)
-    else:
-        raise ValueError("Unsupported file format")
-
-@app.post("/send-bulk")
+@app.post("/send-emails/")
 async def send_bulk_emails(
     file: UploadFile,
+    smtp_server: str = Form(...),
+    smtp_port: int = Form(...),
     email: str = Form(...),
     password: str = Form(...),
     subject: str = Form(...),
-    body: str = Form(...),
-    smtp_server: Optional[str] = Form("smtp.gmail.com"),
-    smtp_port: Optional[int] = Form(587),
+    body: str = Form(...)
 ):
+    # Save uploaded file temporarily
+    temp_path = f"temp_{file.filename}"
+    with open(temp_path, "wb") as f:
+        f.write(await file.read())
+
+    # Read Excel or CSV
+    if file.filename.endswith(".csv"):
+        df = pd.read_csv(temp_path)
+    elif file.filename.endswith(".json"):
+        df = pd.read_json(temp_path)
+    else:
+        df = pd.read_excel(temp_path)
+
+    # Open connection
     try:
-        file_location = f"{UPLOAD_DIR}/{file.filename}"
-        with open(file_location, "wb") as f:
-            f.write(await file.read())
-
-        df = read_file(file_location)
-
-        if 'Email' not in df.columns or 'name' not in df.columns:
-            return {"error": "File must contain 'Email' and 'name' columns"}
-
-        # Connect to SMTP
         server = smtplib.SMTP(smtp_server, smtp_port)
         server.starttls()
         server.login(email, password)
-
-        for _, row in df.iterrows():
-            to_email = row['Email']
-            name = row['name']
-            personalized_body = body.replace('$name', name)
-
-            msg = MIMEMultipart()
-            msg['From'] = email
-            msg['To'] = to_email
-            msg['Subject'] = subject
-            msg.attach(MIMEText(personalized_body, 'plain'))
-
-            server.send_message(msg)
-
-        server.quit()
-        return {"message": "Emails sent successfully!"}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"SMTP login failed: {e}"}
+
+    # Send mails with custom names
+    for _, row in df.iterrows():
+        recipient = row['Email']
+        name = row['name'] if 'name' in row and pd.notnull(row['name']) else ""
+        customized_body = body.replace("$name", name)
+
+        message = MIMEText(customized_body, "plain")
+        message["From"] = email
+        message["To"] = recipient
+        message["Subject"] = subject
+
+        try:
+            server.sendmail(email, recipient, message.as_string())
+        except Exception as e:
+            print(f"Failed to send email to {recipient}: {e}")
+
+    server.quit()
+    os.remove(temp_path)
+
+    return {"message": "Emails sent successfully"}
